@@ -49,6 +49,29 @@ test('달력 이전/다음 달과 날짜 선택은 네이티브에 해당 날짜
  a.snapshot({date:cur,state:'STOPPED'});a.click('#calendar-grid button:nth-of-type(2)');assert.equal(a.calls.at(-1)[1],cur.slice(0,8)+'02');
  }finally{a.w.close();}
 });
+test('탁상시계는 기존 공부시간을 표시하고 뒤로 가면 공부 탭으로 돌아옴',()=>{
+ const a=setup();try{
+  a.start();
+  a.w.StudyBridge.setDeskClockMode=enabled=>a.calls.push(['deskClock',enabled]);
+  a.click('[data-page="study"]');a.snapshot();a.click('#open-desk-clock');
+  assert.equal(a.q('#desk-clock').open,true);
+  assert.match(a.q('#desk-clock-hour-minute').textContent,/^\d{2}:\d{2}$/);
+  assert.match(a.q('#desk-clock-second').textContent,/^:\d{2}$/);
+  assert.equal(a.q('#desk-clock-total').textContent,a.q('#study-time').textContent);
+  assert.deepEqual(a.calls.filter(c=>c[0]==='deskClock'),[['deskClock',true]]);
+  a.snapshot({todayTotal:9301000});
+  assert.equal(a.q('#desk-clock-total').textContent,'02:35:01');
+  a.click('#desk-clock-toggle');
+  assert.deepEqual(a.calls.at(-1),['action','pause']);
+  a.snapshot({state:'MANUAL_PAUSED'});
+  a.click('#desk-clock-toggle');
+  assert.deepEqual(a.calls.at(-1),['action','start']);
+  assert.equal(a.w.closeEditor(),true);
+  assert.equal(a.q('#desk-clock').open,false);
+  assert.equal(a.w.StudyUI.page(),'study');
+  assert.deepEqual(a.calls.at(-1),['deskClock',false]);
+ }finally{a.w.close();}
+});
 test('기존 v1 localStorage를 같은 키로 복원하고 체크와 보관 기록 보존',()=>{
  const P=require(base+'core.js'),today=P.dateKey(),old=P.create(today),c=P.ensureCycle(old,0);c.routines.push({id:'r',name:'기존 루틴',checks:[true,false,true]});c.days[1].push({id:'t',name:'기존 계획',done:true});const a=setup(old);
  try{assert.equal(a.q('#planner .task span').textContent,'기존 루틴');assert.equal(a.q('#planner .task input').checked,true);a.click('#day-tabs button:nth-child(2)');assert.equal(a.q('details .task span').textContent,'기존 계획');assert.equal(a.q('details .task input').checked,true);assert.equal(a.q('#start').open,false);}finally{a.w.close();}

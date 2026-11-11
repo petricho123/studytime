@@ -1,0 +1,11 @@
+.desk-clock-controls {
+  position: absolute;
+  z-index: 1;
+  top: 4px;
+  right: 8px;
+  display: flex;
+  font-size: 14px;
+}
+.desk-clock-controls #close-desk-clock { position: static; }
+#desk-clock .desk-clock-face { padding-top: 54px; }
+#desk-clock .desk-clock-time { font-size: min(16vw, 39vh); }

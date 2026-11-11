@@ -131,3 +131,15 @@ Google Play 등록은 별도 배포 작업입니다. 현재 파일은 개인용 
 자동화 테스트와 브라우저 UI 확인은 실제 안드로이드 잠금·절전·업데이트 데이터 유지 검증을 대신하지 않습니다.
 
 공식 참고: [WebView](https://developer.android.com/develop/ui/views/layout/webapps/webview), [Foreground service types](https://developer.android.com/develop/background-work/services/fgs/service-types), [Activity lifecycle](https://developer.android.com/guide/components/activities/activity-lifecycle).
+
+## 맥북용 PWA
+
+1. GitHub 저장소의 **Settings → Pages → Build and deployment → Source**를 **GitHub Actions**로 설정합니다.
+2. **Actions → Build and deploy PWA → Run workflow**에서 `main`을 선택합니다. 이후 PWA 소스를 `main`에 반영하면 자동 배포됩니다.
+3. 배포된 주소를 맥북 Safari에서 열고 **파일 → Dock에 추가**를 누릅니다(macOS Sonoma 14 이상).
+
+**공부 → 탁상시계**에서 현재 시각과 오늘 누적 공부시간을 볼 수 있습니다. 시계 크기는 창 크기에 맞춰 바뀌고, 전체 화면 버튼이나 macOS 창 제어로 확대할 수 있습니다. 브라우저가 허용하는 경우 탁상시계가 표시되는 동안 화면이 계속 켜집니다.
+
+공부 기록과 플래너는 해당 웹 앱에 저장됩니다. 안드로이드의 **설정 → 전체 기록 백업 파일 저장**으로 만든 JSON은 웹 앱의 **설정 → 백업·공부 기록 가져오기**에서 복원할 수 있습니다. 첫 로딩을 완료한 뒤에는 오프라인으로 다시 열 수 있습니다.
+
+로컬에서 확인하려면 `node pwa/build.mjs /tmp/studytime-pwa`를 실행하고 `python3 -m http.server 8000 --directory /tmp/studytime-pwa`로 연 뒤 `http://localhost:8000`에 접속합니다.

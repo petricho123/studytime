@@ -6,6 +6,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.KeyguardManager;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
@@ -16,6 +17,8 @@ import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.View;
 import android.view.WindowInsets;
+import android.view.WindowInsetsController;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -44,7 +47,8 @@ public class MainActivity extends Activity {
     private Runnable pendingLeave;
     private String date = LocalDate.now().toString(), month = YearMonth.now().toString(), pendingExport;
     private static final int EXPORT = 40, IMPORT = 41, NOTIFICATIONS = 42;
-    private boolean importing, webReady;
+    private boolean importing, webReady, deskClockMode;
+    private int previousOrientation;
 
     @SuppressLint("SetJavaScriptEnabled") // Required for packaged, CSP-restricted assets; all remote navigation is blocked.
     @Override public void onCreate(Bundle saved) {
@@ -116,6 +120,42 @@ public class MainActivity extends Activity {
         long leaveAt = app.now();
         pendingLeave = () -> { if (!app.activityResumed && unlocked()) autoPause(leaveAt); };
         handler.postDelayed(pendingLeave, 500);
+    }
+    private void setDeskClockMode(boolean enabled) {
+        if (isDestroyed() || deskClockMode == enabled) return;
+        deskClockMode = enabled;
+        if (enabled) {
+            previousOrientation = getRequestedOrientation();
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else {
+            setRequestedOrientation(previousOrientation);
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
+        web.setBackgroundColor(enabled ? 0xff000000 : 0xfff7fbff);
+        updateDeskClockBars();
+    }
+    private void updateDeskClockBars() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                if (deskClockMode) {
+                    controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                    controller.hide(WindowInsets.Type.systemBars());
+                } else {
+                    controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_DEFAULT);
+                    controller.show(WindowInsets.Type.systemBars());
+                }
+                return;
+            }
+        }
+        int normal = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        int immersive = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+        getWindow().getDecorView().setSystemUiVisibility(deskClockMode ? immersive : normal);
+    }
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && deskClockMode) updateDeskClockBars();
     }
     @Override public void onBackPressed() {
         if (web == null) return;
@@ -203,6 +243,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void snapshot(String selected, String selectedMonth) {
             handler.post(() -> { try { date = LocalDate.parse(selected).toString(); month = YearMonth.parse(selectedMonth).toString(); MainActivity.this.snapshot(); } catch (Exception e) { message("날짜를 확인해 주세요."); } });
         }
+        @JavascriptInterface public void setDeskClockMode(boolean enabled) { handler.post(() -> MainActivity.this.setDeskClockMode(enabled)); }
         @JavascriptInterface public void action(String action) { handler.post(() -> command(action)); }
         @JavascriptInterface public void editRecord(String id, long start, long end) {
             handler.post(() -> {

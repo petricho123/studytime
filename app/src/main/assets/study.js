@@ -7,10 +7,46 @@
  function request(){if(window.StudyBridge)bridge('snapshot',selected,month);}
  function show(page){activePage=page;document.querySelectorAll('.page').forEach(p=>p.hidden=p.id!=='page-'+page);document.querySelectorAll('[data-page]').forEach(b=>{if(b.dataset.page===page)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});q('#study-bar').hidden=page==='study';q('#menu').hidden=true;request();}
  document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>show(b.dataset.page));q('#study-bar').onclick=()=>show('study');
+ const deskClock = q('#desk-clock');
+ const deskClockToggle = q('#desk-clock-toggle');
+ const dateFormat = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+ let deskClockTick;
+ function updateDeskClock() {
+   const now = new Date();
+   const [hours, minutes, seconds] = [now.getHours(), now.getMinutes(), now.getSeconds()].map(n => String(n).padStart(2, '0'));
+   q('#desk-clock-date').textContent = dateFormat.format(now);
+   q('#desk-clock-hour-minute').textContent = hours + ':' + minutes;
+   q('#desk-clock-second').textContent = ':' + seconds;
+ }
+ function openDeskClock() {
+   if (deskClock.open) return;
+   updateDeskClock();
+   deskClock.showModal();
+   bridge('setDeskClockMode', true);
+   deskClockTick = setInterval(updateDeskClock, 200);
+   request();
+ }
+ function closeDeskClock() {
+   if (!deskClock.open) return false;
+   clearInterval(deskClockTick);
+   deskClock.close();
+   bridge('setDeskClockMode', false);
+   return true;
+ }
+ q('#open-desk-clock').onclick = openDeskClock;
+ q('#close-desk-clock').onclick = closeDeskClock;
+ deskClock.addEventListener('cancel', event => { event.preventDefault(); closeDeskClock(); });
+ deskClockToggle.onclick = () => q('#study-start').click();
+ function updateDeskStudy(data, running) {
+   q('#desk-clock-total').textContent = clock(data.todayTotal);
+   deskClockToggle.textContent = running ? 'Ⅱ' : '▶';
+   deskClockToggle.setAttribute('aria-label', running ? '공부 일시정지' : '공부 시작');
+   deskClockToggle.disabled = data.loadFailed;
+ }
  function message(text){PlannerUI.toast(text);}
  function records(list,target,editable){const root=q(target);root.replaceChildren();if(!list.length){const p=document.createElement('p');p.className='empty';p.textContent='아직 공부 기록이 없어요';root.append(p);return;}list.forEach(r=>{const b=document.createElement(editable&&!r.live?'button':'div');b.className='record'+(r.live?' live':'');if(b.tagName==='BUTTON'){b.type='button';b.onclick=()=>edit(r);}const span=document.createElement('span'),small=document.createElement('small');span.textContent=(r.live?'● ':'')+r.label;small.textContent=r.live?'기록 중':readable(r.elapsed);b.append(span,small);root.append(b);});}
  function drawCalendar(data){const key=JSON.stringify([month,selected,data.days,data.monthTotal]);if(calendarKey===key)return;calendarKey=key;const [year,m]=month.split('-').map(Number);q('#month-title').textContent=year+'년 '+m+'월';q('#month-total').textContent=readable(data.monthTotal);const grid=q('#calendar-grid');grid.replaceChildren();['일','월','화','수','목','금','토'].forEach(t=>{const d=document.createElement('div');d.className='weekday';d.textContent=t;grid.append(d);});const offset=new Date(year,m-1,1).getDay();for(let i=0;i<offset;i++)grid.append(document.createElement('div'));for(let d=1;d<=new Date(year,m,0).getDate();d++){const key=month+'-'+String(d).padStart(2,'0'),ms=data.days[d-1]||0,b=document.createElement('button');b.type='button';b.textContent=d;b.setAttribute('aria-pressed',String(key===selected));b.setAttribute('aria-label',key+' '+readable(ms));if(key===data.today)b.className='today';const t=document.createElement('small');t.textContent=ms===0?'':ms<60000?'<1분':Math.floor(ms/3600000)+'h'+Math.floor(ms/60000)%60;b.append(t);b.onclick=()=>{selected=key;calendarKey='';request();};grid.append(b);}q('#selected-date').textContent=Number(selected.slice(5,7))+'월 '+Number(selected.slice(8))+'일';q('#add-record').disabled=selected>data.today||data.loadFailed;}
- function receive(data){snapshot=data;const running=data.state==='RUNNING';q('#compact-time').textContent=clock(data.todayTotal);q('#study-time').textContent=clock(data.todayTotal);q('#study-date').textContent=Number(data.today.slice(5,7))+'월 '+Number(data.today.slice(8))+'일 · 오늘의 공부';const states={RUNNING:'● 공부시간 기록 중',AUTO_PAUSED:'자동 일시정지 · 앱으로 돌아오면 이어서 기록',MANUAL_PAUSED:'일시정지 중',STOPPED:'시작을 누르면 오늘 시간에 이어서 기록해요'};q('#study-state').textContent=data.saveFailed?'저장 실패 · 저장 공간을 확인해 주세요':states[data.state];q('#compact-state').textContent=running?'● 기록 중　›':data.state==='STOPPED'?'시작하기　›':'일시정지　›';q('#study-start').textContent=running?'일시정지':'공부 시작';q('#study-start').disabled=data.loadFailed;q('#study-stop').disabled=data.state==='STOPPED';const tk=JSON.stringify(data.todayRecords);if(tk!==todayKey){todayKey=tk;records(data.todayRecords,'#today-records',false);}if(data.date===selected&&data.month===month){drawCalendar(data);q('#selected-total').textContent='총 '+clock(data.selectedTotal);const rk=JSON.stringify(data.selectedRecords);if(rk!==recordsKey){recordsKey=rk;records(data.selectedRecords,'#date-records',true);}}if(data.recovered){message('실행 중단 전 마지막 저장 기록을 복원했어요. 이후 시간은 확인 후 추가해 주세요.');}if(data.loadFailed)message('기록을 읽지 못해 기존 파일을 보호하고 있어요. 앱을 삭제하지 말고 지원을 요청해 주세요.');}
+ function receive(data){snapshot=data;const running=data.state==='RUNNING';updateDeskStudy(data,running);q('#compact-time').textContent=clock(data.todayTotal);q('#study-time').textContent=clock(data.todayTotal);q('#study-date').textContent=Number(data.today.slice(5,7))+'월 '+Number(data.today.slice(8))+'일 · 오늘의 공부';const states={RUNNING:'● 공부시간 기록 중',AUTO_PAUSED:'자동 일시정지 · 앱으로 돌아오면 이어서 기록',MANUAL_PAUSED:'일시정지 중',STOPPED:'시작을 누르면 오늘 시간에 이어서 기록해요'};q('#study-state').textContent=data.saveFailed?'저장 실패 · 저장 공간을 확인해 주세요':states[data.state];q('#compact-state').textContent=running?'● 기록 중　›':data.state==='STOPPED'?'시작하기　›':'일시정지　›';q('#study-start').textContent=running?'일시정지':'공부 시작';q('#study-start').disabled=data.loadFailed;q('#study-stop').disabled=data.state==='STOPPED';const tk=JSON.stringify(data.todayRecords);if(tk!==todayKey){todayKey=tk;records(data.todayRecords,'#today-records',false);}if(data.date===selected&&data.month===month){drawCalendar(data);q('#selected-total').textContent='총 '+clock(data.selectedTotal);const rk=JSON.stringify(data.selectedRecords);if(rk!==recordsKey){recordsKey=rk;records(data.selectedRecords,'#date-records',true);}}if(data.recovered){message('실행 중단 전 마지막 저장 기록을 복원했어요. 이후 시간은 확인 후 추가해 주세요.');}if(data.loadFailed)message('기록을 읽지 못해 기존 파일을 보호하고 있어요. 앱을 삭제하지 말고 지원을 요청해 주세요.');}
  q('#study-start').onclick=()=>bridge('action',snapshot&&snapshot.state==='RUNNING'?'pause':'start');q('#study-stop').onclick=()=>bridge('action','stop');
  function moveMonth(n){const [y,m]=month.split('-').map(Number),d=new Date(y,m-1+n,1);month=P.dateKey(d).slice(0,7);selected=month+'-01';calendarKey='';recordsKey='';request();}
  q('#month-prev').onclick=()=>moveMonth(-1);q('#month-next').onclick=()=>moveMonth(1);
@@ -20,6 +56,6 @@
  q('#record-form').onsubmit=e=>{e.preventDefault();const a=new Date(q('#record-start').value).getTime(),b=new Date(q('#record-end').value).getTime();if(!Number.isFinite(a)||!Number.isFinite(b)||b<=a||b>Date.now()){q('#record-error').textContent='종료 시각은 시작 이후이며 현재 시각 이전이어야 합니다.';return;}bridge('editRecord',editId,a,b);};
  q('#settings-today').onclick=()=>{q('#today-button').click();};q('#settings-routines').onclick=()=>{show('planner');PlannerUI.editRoutines();};q('#settings-history').onclick=()=>q('#history-button').click();q('#settings-reset').onclick=()=>q('#reset-button').click();q('#notification-settings').onclick=()=>bridge('openSettings','notification');q('#battery-settings').onclick=()=>bridge('openSettings','battery');q('#backup').onclick=()=>bridge('exportData',JSON.stringify(PlannerUI.raw()));q('#restore').onclick=()=>bridge('chooseImport');
  function prepareImport(data){try{if(data.type==='three-day-study-backup'){if(data.version!==1)throw Error('지원하지 않는 백업 버전입니다.');PlannerUI.validate(data.planner);if(!data.study||!Array.isArray(data.study.records))throw Error('공부 기록이 없습니다.');if(window.confirm('현재 플래너와 공부 기록을 백업 내용으로 바꿀까요? 먼저 현재 기록을 백업하는 것을 권장합니다.'))bridge('importData',JSON.stringify(data));}else if(Array.isArray(data.records)){if(window.confirm('공부 기록을 현재 기록에 추가할까요? 겹치는 시간은 중복 합산하지 않습니다.'))bridge('importData',JSON.stringify(data));}else throw Error('올바른 백업 파일이 아닙니다.');}catch(e){message(e.message);}}
- window.StudyUI={show,page:()=>activePage,receive,request,message,prepareImport,recordSaved(){q('#record-editor').close();recordsKey='';calendarKey='';request();},recordError(text){q('#record-error').textContent=text;message(text);},imported(){recordsKey='';todayKey='';calendarKey='';message('기록을 가져왔어요.');request();}};
+ window.StudyUI={show,closeDeskClock,page:()=>activePage,receive,request,message,prepareImport,recordSaved(){q('#record-editor').close();recordsKey='';calendarKey='';request();},recordError(text){q('#record-error').textContent=text;message(text);},imported(){recordsKey='';todayKey='';calendarKey='';message('기록을 가져왔어요.');request();}};
  let lastDay=P.dateKey();setInterval(()=>{const today=P.dateKey();if(today!==lastDay){if(selected===lastDay){selected=today;month=today.slice(0,7);}lastDay=today;refreshToday();calendarKey='';}if(!document.hidden)request();},1000);request();
 })();
